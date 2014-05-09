@@ -1,0 +1,6 @@
+|-
+!style="background:#101010; padding: 1px; text-align:center; font-size: 12px; color:white"|
+{{{name}}}
+|-
+| style="background:#202020; font-size: 11px; text-align:center;" |
+{{{links}}}

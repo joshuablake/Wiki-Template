@@ -1,6 +1,7 @@
 from cookielib import CookieJar
 import json
 import logging
+from time import sleep
 import urllib
 import urllib2
 logger = logging.getLogger(__name__)
@@ -9,9 +10,8 @@ class RequestError(Exception):
     pass
 
 class Wiki(object):
-    def __init__(self, url, delay):
+    def __init__(self, url):
         self._url = url
-        self.delay = delay
         self.logged_in = False
     
     def _build_url(self, action, **params):
@@ -24,15 +24,22 @@ class Wiki(object):
             kwargs['format'] = 'json'
             request = urllib2.Request(self._build_url(action), urllib.urlencode(kwargs.items()))
         else:
-            request = urllib2.Request(self._build_url(action, format='json', **kwargs))
+            url = self._build_url(action, format='json', **kwargs)
+            request = urllib2.Request(url)
         logger.debug('Fetching from wiki: '+request.get_full_url())
         try:
             response = urllib2.urlopen(request)
         except urllib2.HTTPError as e:
-            logger.warning('Error code %s for page %s response was %s',
+            logger.error('Error code %s for page %s response was %s',
                       e.code, request.get_full_url(), e.read())
             raise
-        return json.load(response)
+        string = response.read().decode('utf-8')
+        try:
+            return json.loads(string)
+        except ValueError:
+            logger.error('No valid response for url. '
+                         'Resposne was %s', response.read())
+            raise
     
     def login(self, username, password, token=''):
         urllib2.install_opener(urllib2.build_opener(urllib2.HTTPCookieProcessor(CookieJar())))
@@ -58,6 +65,7 @@ class Wiki(object):
         """
         if not category.startswith('Category:'):
             category = 'Category:'+category
+        category = category.replace(' ', '_')
         cmtype = 'page'
         if get_subcategories:
             cmtype += '|subcat'
@@ -66,11 +74,12 @@ class Wiki(object):
             list='categorymembers',
             cmtitle=category,
             cmprop='title|type',
+            cmlimit='500',
             cmtype=cmtype,
         )
         pages = []
         subcategories = []
-        for member in response['query']['categorymembers'].values():
+        for member in response['query']['categorymembers']:
             if member['type'] == 'page':
                 pages.append(member['title'])
             elif member['type'] == 'subcat':
@@ -79,4 +88,4 @@ class Wiki(object):
                 logger.warning('Unknown type %s of name %s',
                                member['type'], member['title']
                 )
-        return subcategories, pages
+        return pages, subcategories
